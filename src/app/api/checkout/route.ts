@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getDb } from "@/lib/db";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 import { getMenuItem } from "@/lib/menu";
 
 interface CartItem {
@@ -56,7 +56,7 @@ export async function POST(req: Request) {
 
   const origin = req.headers.get("origin") || "http://localhost:3000";
 
-  const checkoutSession = await stripe.checkout.sessions.create({
+  const checkoutSession = await getStripe().checkout.sessions.create({
     mode: "payment",
     line_items: lineItems,
     success_url: `${origin}/order/confirmation?session_id={CHECKOUT_SESSION_ID}`,

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getDb } from "@/lib/db";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Missing session ID" }, { status: 400 });
   }
 
-  const checkoutSession = await stripe.checkout.sessions.retrieve(sessionId);
+  const checkoutSession = await getStripe().checkout.sessions.retrieve(sessionId);
 
   if (checkoutSession.payment_status !== "paid") {
     return NextResponse.json({ error: "Payment not completed" }, { status: 400 });
