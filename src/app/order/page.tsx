@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import type { MenuCategory, MenuItem } from "@/lib/menu";
@@ -67,6 +67,23 @@ function formatPrice(cents: number) {
 }
 
 export default function OrderPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gray-50">
+          <Navbar />
+          <div className="flex items-center justify-center mt-32">
+            <div className="text-gray-400 text-lg">Loading menu...</div>
+          </div>
+        </div>
+      }
+    >
+      <OrderContent />
+    </Suspense>
+  );
+}
+
+function OrderContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [userName, setUserName] = useState<string | undefined>();
