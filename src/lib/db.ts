@@ -1,13 +1,14 @@
-import Database from "better-sqlite3";
+import type Database from "better-sqlite3";
 import path from "path";
-
-const DB_PATH = path.join(process.cwd(), "rewards.db");
 
 let db: Database.Database | null = null;
 
 export function getDb(): Database.Database {
   if (!db) {
-    db = new Database(DB_PATH);
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const BetterSqlite3 = require("better-sqlite3") as typeof Database;
+    const dbPath = path.join(process.cwd(), "rewards.db");
+    db = new BetterSqlite3(dbPath);
     db.pragma("journal_mode = WAL");
     db.pragma("foreign_keys = ON");
     migrate(db);
