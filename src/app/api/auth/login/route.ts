@@ -10,7 +10,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
   }
 
-  const db = getDb();
+  let db;
+  try {
+    db = getDb();
+  } catch {
+    return NextResponse.json({ error: "Service temporarily unavailable" }, { status: 503 });
+  }
+
   const user = db.prepare("SELECT id, password_hash FROM users WHERE email = ?").get(email) as
     | { id: number; password_hash: string }
     | undefined;

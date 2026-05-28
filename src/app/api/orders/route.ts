@@ -8,7 +8,13 @@ export async function GET() {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const db = getDb();
+  let db;
+  try {
+    db = getDb();
+  } catch {
+    return NextResponse.json({ error: "Service temporarily unavailable" }, { status: 503 });
+  }
+
   const orders = db.prepare(
     `SELECT id, status, total_cents, points_earned, created_at
      FROM orders WHERE user_id = ? ORDER BY created_at DESC LIMIT 20`

@@ -14,7 +14,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Password must be at least 6 characters" }, { status: 400 });
   }
 
-  const db = getDb();
+  let db;
+  try {
+    db = getDb();
+  } catch {
+    return NextResponse.json({ error: "Service temporarily unavailable" }, { status: 503 });
+  }
+
   const existing = db.prepare("SELECT id FROM users WHERE email = ?").get(email);
   if (existing) {
     return NextResponse.json({ error: "Email already registered" }, { status: 409 });

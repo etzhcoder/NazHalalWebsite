@@ -25,7 +25,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Order not found" }, { status: 404 });
   }
 
-  const db = getDb();
+  let db;
+  try {
+    db = getDb();
+  } catch {
+    return NextResponse.json({ error: "Service temporarily unavailable" }, { status: 503 });
+  }
+
   const order = db.prepare(
     "SELECT id, total_cents, status FROM orders WHERE id = ? AND user_id = ?"
   ).get(Number(orderId), session.userId) as

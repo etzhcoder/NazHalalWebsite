@@ -28,7 +28,12 @@ export async function POST(req: Request) {
     const userId = session.metadata?.user_id;
 
     if (orderId && userId) {
-      const db = getDb();
+      let db;
+      try {
+        db = getDb();
+      } catch {
+        return NextResponse.json({ error: "Service temporarily unavailable" }, { status: 503 });
+      }
       const order = db.prepare("SELECT id, total_cents, status FROM orders WHERE id = ?").get(
         Number(orderId)
       ) as { id: number; total_cents: number; status: string } | undefined;

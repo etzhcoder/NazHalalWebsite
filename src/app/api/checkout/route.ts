@@ -40,7 +40,13 @@ export async function POST(req: Request) {
     totalCents += menuItem.price * cartItem.quantity;
   }
 
-  const db = getDb();
+  let db;
+  try {
+    db = getDb();
+  } catch {
+    return NextResponse.json({ error: "Service temporarily unavailable" }, { status: 503 });
+  }
+
   const orderResult = db.prepare(
     "INSERT INTO orders (user_id, status, total_cents) VALUES (?, 'pending', ?)"
   ).run(session.userId, totalCents);

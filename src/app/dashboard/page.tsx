@@ -51,20 +51,25 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function load() {
-      const [userRes, historyRes, ordersRes] = await Promise.all([
-        fetch("/api/auth/me"),
-        fetch("/api/points"),
-        fetch("/api/orders"),
-      ]);
+      try {
+        const [userRes, historyRes, ordersRes] = await Promise.all([
+          fetch("/api/auth/me"),
+          fetch("/api/points"),
+          fetch("/api/orders"),
+        ]);
 
-      if (!userRes.ok) {
+        if (!userRes.ok) {
+          router.push("/login");
+          return;
+        }
+
+        setUser(await userRes.json());
+        if (historyRes.ok) setHistory(await historyRes.json());
+        if (ordersRes.ok) setOrders(await ordersRes.json());
+      } catch {
         router.push("/login");
         return;
       }
-
-      setUser(await userRes.json());
-      setHistory(await historyRes.json());
-      if (ordersRes.ok) setOrders(await ordersRes.json());
       setLoading(false);
     }
     load();
@@ -78,8 +83,8 @@ export default function DashboardPage() {
     });
 
     if (!res.ok) {
-      const data = await res.json();
-      alert(data.error || "Failed to redeem");
+      const data = await res.json().catch(() => null);
+      alert(data?.error || "Failed to redeem");
       return;
     }
 
