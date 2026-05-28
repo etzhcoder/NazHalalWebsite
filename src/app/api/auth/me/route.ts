@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getDb } from "@/lib/db";
-import { isDemoUser, DEMO_USER } from "@/lib/demo-user";
+import { getDb, migrate } from "@/lib/db";
 
 export async function GET() {
   const session = await getSession();
@@ -9,22 +8,15 @@ export async function GET() {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  if (isDemoUser(session.userId)) {
-    const { password, ...user } = DEMO_USER;
-    return NextResponse.json(user);
-  }
+  const db = getDb();
+  await migrate();
 
-  let db;
-  try {
-    db = getDb();
-  } catch {
-    return NextResponse.json({ error: "Service temporarily unavailable" }, { status: 503 });
-  }
+  const result = await db.execute({
+    sql: "SELECT id, name, email, points, created_at FROM users WHERE id = ?",
+    args: [session.userId],
+  });
 
-  const user = db.prepare("SELECT id, name, email, points, created_at FROM users WHERE id = ?").get(session.userId) as
-    | { id: number; name: string; email: string; points: number; created_at: string }
-    | undefined;
-
+  const user = result.rows[0];
   if (!user) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }

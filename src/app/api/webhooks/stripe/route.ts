@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
-import { getDb } from "@/lib/db";
+import { getDb, migrate } from "@/lib/db";
 import type Stripe from "stripe";
 
 export async function POST(req: Request) {
@@ -28,32 +28,31 @@ export async function POST(req: Request) {
     const userId = session.metadata?.user_id;
 
     if (orderId && userId) {
-      let db;
-      try {
-        db = getDb();
-      } catch {
-        return NextResponse.json({ error: "Service temporarily unavailable" }, { status: 503 });
-      }
-      const order = db.prepare("SELECT id, total_cents, status FROM orders WHERE id = ?").get(
-        Number(orderId)
-      ) as { id: number; total_cents: number; status: string } | undefined;
+      const db = getDb();
+      await migrate();
 
-      if (order && order.status === "pending") {
-        const pointsEarned = Math.floor(order.total_cents / 100);
+      const orderResult = await db.execute({
+        sql: "SELECT id, total_cents, status FROM orders WHERE id = ?",
+        args: [Number(orderId)],
+      });
 
-        db.transaction(() => {
-          db.prepare("UPDATE orders SET status = 'paid', points_earned = ? WHERE id = ?").run(
-            pointsEarned,
-            order.id
-          );
-          db.prepare("UPDATE users SET points = points + ? WHERE id = ?").run(
-            pointsEarned,
-            Number(userId)
-          );
-          db.prepare(
-            "INSERT INTO points_history (user_id, amount, reason) VALUES (?, ?, ?)"
-          ).run(Number(userId), pointsEarned, `Order #${order.id} - earned points`);
-        })();
+      const order = orderResult.rows[0];
+
+      if (order && String(order.status) === "pending") {
+        const pointsEarned = Math.floor(Number(order.total_cents) / 100);
+
+        await db.execute({
+          sql: "UPDATE orders SET status = 'paid', points_earned = ? WHERE id = ?",
+          args: [pointsEarned, order.id],
+        });
+        await db.execute({
+          sql: "UPDATE users SET points = points + ? WHERE id = ?",
+          args: [pointsEarned, Number(userId)],
+        });
+        await db.execute({
+          sql: "INSERT INTO points_history (user_id, amount, reason) VALUES (?, ?, ?)",
+          args: [Number(userId), pointsEarned, `Order #${order.id} - earned points`],
+        });
       }
     }
   }

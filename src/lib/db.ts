@@ -1,23 +1,20 @@
-import type Database from "better-sqlite3";
-import path from "path";
+import { createClient, type Client } from "@libsql/client";
 
-let db: Database.Database | null = null;
+let client: Client | null = null;
 
-export function getDb(): Database.Database {
-  if (!db) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const BetterSqlite3 = require("better-sqlite3") as typeof Database;
-    const dbPath = path.join(process.cwd(), "rewards.db");
-    db = new BetterSqlite3(dbPath);
-    db.pragma("journal_mode = WAL");
-    db.pragma("foreign_keys = ON");
-    migrate(db);
+export function getDb(): Client {
+  if (!client) {
+    client = createClient({
+      url: process.env.TURSO_DATABASE_URL!,
+      authToken: process.env.TURSO_AUTH_TOKEN,
+    });
   }
-  return db;
+  return client;
 }
 
-function migrate(db: Database.Database) {
-  db.exec(`
+export async function migrate() {
+  const db = getDb();
+  await db.executeMultiple(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,

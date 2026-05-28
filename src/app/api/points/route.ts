@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getDb } from "@/lib/db";
-import { isDemoUser, DEMO_USER } from "@/lib/demo-user";
+import { getDb, migrate } from "@/lib/db";
 
 export async function GET() {
   const session = await getSession();
@@ -9,25 +8,15 @@ export async function GET() {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  if (isDemoUser(session.userId)) {
-    return NextResponse.json([
-      { id: 1, amount: 100, reason: "Welcome bonus", created_at: DEMO_USER.created_at },
-      { id: 2, amount: 150, reason: "Order #1 - earned points", created_at: DEMO_USER.created_at },
-    ]);
-  }
+  const db = getDb();
+  await migrate();
 
-  let db;
-  try {
-    db = getDb();
-  } catch {
-    return NextResponse.json({ error: "Service temporarily unavailable" }, { status: 503 });
-  }
+  const result = await db.execute({
+    sql: "SELECT id, amount, reason, created_at FROM points_history WHERE user_id = ? ORDER BY created_at DESC LIMIT 50",
+    args: [session.userId],
+  });
 
-  const history = db.prepare(
-    "SELECT id, amount, reason, created_at FROM points_history WHERE user_id = ? ORDER BY created_at DESC LIMIT 50"
-  ).all(session.userId);
-
-  return NextResponse.json(history);
+  return NextResponse.json(result.rows);
 }
 
 export async function POST(req: Request) {
@@ -36,47 +25,42 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  if (isDemoUser(session.userId)) {
-    return NextResponse.json({ points: DEMO_USER.points });
-  }
-
   const { amount, reason } = await req.json();
 
   if (typeof amount !== "number" || !reason) {
     return NextResponse.json({ error: "Amount and reason are required" }, { status: 400 });
   }
 
-  let db;
-  try {
-    db = getDb();
-  } catch {
-    return NextResponse.json({ error: "Service temporarily unavailable" }, { status: 503 });
-  }
+  const db = getDb();
+  await migrate();
 
-  const user = db.prepare("SELECT points FROM users WHERE id = ?").get(session.userId) as
-    | { points: number }
-    | undefined;
+  const userResult = await db.execute({
+    sql: "SELECT points FROM users WHERE id = ?",
+    args: [session.userId],
+  });
 
+  const user = userResult.rows[0];
   if (!user) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  if (user.points + amount < 0) {
+  if (Number(user.points) + amount < 0) {
     return NextResponse.json({ error: "Insufficient points" }, { status: 400 });
   }
 
-  const update = db.transaction(() => {
-    db.prepare("UPDATE users SET points = points + ? WHERE id = ?").run(amount, session.userId);
-    db.prepare("INSERT INTO points_history (user_id, amount, reason) VALUES (?, ?, ?)").run(
-      session.userId,
-      amount,
-      reason
-    );
+  await db.execute({
+    sql: "UPDATE users SET points = points + ? WHERE id = ?",
+    args: [amount, session.userId],
+  });
+  await db.execute({
+    sql: "INSERT INTO points_history (user_id, amount, reason) VALUES (?, ?, ?)",
+    args: [session.userId, amount, reason],
   });
 
-  update();
+  const updated = await db.execute({
+    sql: "SELECT points FROM users WHERE id = ?",
+    args: [session.userId],
+  });
 
-  const updated = db.prepare("SELECT points FROM users WHERE id = ?").get(session.userId) as { points: number };
-
-  return NextResponse.json({ points: updated.points });
+  return NextResponse.json({ points: Number(updated.rows[0].points) });
 }

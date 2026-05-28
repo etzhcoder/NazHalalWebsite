@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getDb } from "@/lib/db";
+import { getDb, migrate } from "@/lib/db";
 import { getStripe } from "@/lib/stripe";
 import { getMenuItem } from "@/lib/menu";
 
@@ -40,24 +40,21 @@ export async function POST(req: Request) {
     totalCents += menuItem.price * cartItem.quantity;
   }
 
-  let db;
-  try {
-    db = getDb();
-  } catch {
-    return NextResponse.json({ error: "Service temporarily unavailable" }, { status: 503 });
-  }
+  const db = getDb();
+  await migrate();
 
-  const orderResult = db.prepare(
-    "INSERT INTO orders (user_id, status, total_cents) VALUES (?, 'pending', ?)"
-  ).run(session.userId, totalCents);
-  const orderId = orderResult.lastInsertRowid as number;
+  const orderResult = await db.execute({
+    sql: "INSERT INTO orders (user_id, status, total_cents) VALUES (?, 'pending', ?)",
+    args: [session.userId, totalCents],
+  });
+  const orderId = Number(orderResult.lastInsertRowid);
 
-  const insertItem = db.prepare(
-    "INSERT INTO order_items (order_id, menu_item_id, name, price_cents, quantity) VALUES (?, ?, ?, ?, ?)"
-  );
   for (const cartItem of items) {
     const menuItem = getMenuItem(cartItem.id)!;
-    insertItem.run(orderId, cartItem.id, menuItem.name, menuItem.price, cartItem.quantity);
+    await db.execute({
+      sql: "INSERT INTO order_items (order_id, menu_item_id, name, price_cents, quantity) VALUES (?, ?, ?, ?, ?)",
+      args: [orderId, cartItem.id, menuItem.name, menuItem.price, cartItem.quantity],
+    });
   }
 
   const origin = req.headers.get("origin") || "http://localhost:3000";
@@ -73,10 +70,10 @@ export async function POST(req: Request) {
     },
   });
 
-  db.prepare("UPDATE orders SET stripe_session_id = ? WHERE id = ?").run(
-    checkoutSession.id,
-    orderId
-  );
+  await db.execute({
+    sql: "UPDATE orders SET stripe_session_id = ? WHERE id = ?",
+    args: [checkoutSession.id, orderId],
+  });
 
   return NextResponse.json({ url: checkoutSession.url });
 }
