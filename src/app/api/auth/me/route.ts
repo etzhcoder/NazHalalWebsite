@@ -1,11 +1,17 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getDb } from "@/lib/db";
+import { isDemoUser, DEMO_USER } from "@/lib/demo-user";
 
 export async function GET() {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  if (isDemoUser(session.userId)) {
+    const { password, ...user } = DEMO_USER;
+    return NextResponse.json(user);
   }
 
   let db;

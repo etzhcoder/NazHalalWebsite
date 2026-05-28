@@ -2,12 +2,18 @@ import { NextResponse } from "next/server";
 import { compareSync } from "bcryptjs";
 import { getDb } from "@/lib/db";
 import { createSession } from "@/lib/auth";
+import { DEMO_USER } from "@/lib/demo-user";
 
 export async function POST(req: Request) {
   const { email, password } = await req.json();
 
   if (!email || !password) {
     return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
+  }
+
+  if (email === DEMO_USER.email && password === DEMO_USER.password) {
+    await createSession(DEMO_USER.id);
+    return NextResponse.json({ success: true });
   }
 
   let db;
